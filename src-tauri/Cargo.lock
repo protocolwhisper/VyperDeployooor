@@ -106,6 +106,7 @@ name = "app"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "env",
  "ethers",
  "once_cell",
  "serde",
@@ -1154,6 +1155,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "env"
+version = "0.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "876927d21ef1ae98001c8c35a1d8dfd682136914b23ef04276820fa6d43c3630"
+
+[[package]]
 name = "equivalent"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1385,6 +1392,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4aab5af432b3fe5b7756b60df5c9ddeb85a13414575ad8a9acd707c24f0a77a5"
 dependencies = [
  "ethers-core",
+ "ethers-solc",
  "reqwest",
  "semver",
  "serde",

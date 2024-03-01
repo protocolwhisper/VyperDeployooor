@@ -4,13 +4,14 @@ use ethers::signers::Wallet;
 use serde::{Deserialize, Serialize};
 use serde_json::{to_writer_pretty, Value};
 use sqlx::SqlitePool;
-use std::{fs::File, io::BufReader, path::{Path, PathBuf}};
+use std::{fs::{self, File}, io::BufReader, path::{Path, PathBuf}, process::Command};
 use vyper_rs::vyper::{Evm, Vyper};
 pub mod db;
 use db::*;
 use tabled::{Table, settings::Style};
 use ethers::core::rand::thread_rng;
-
+use ethers::solc::{Project , ProjectPathsConfig};
+use std::str;
 #[derive(Serialize, Deserialize)]
 struct ContractWalletData {
     abi: Value,
@@ -156,3 +157,46 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .run(tauri::generate_context!())?;
     Ok(())
 }
+
+
+
+fn test_solidity(file_path : &str , output_path : &str) -> std::io::Result<()> {
+    // Specify the full path to the solc executable
+    let solc_path = "/opt/homebrew/bin/solc";
+
+    let output = Command::new(solc_path)
+        .args([
+            "--combined-json", "abi,bin,metadata",
+            "--overwrite",
+            file_path,
+            "-o", output_path
+        ])
+        .output()?;
+
+    if !output.status.success() {
+        let e = String::from_utf8_lossy(&output.stderr);
+        panic!("Command executed with failing error code: {}", e);
+    }
+
+    println!("solc compilation successful");
+    println!("{:?}" , output);
+    Ok(())
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test] // Changed to synchronous test for simplicity
+    fn test_compile_test_refactored() {
+        let file_path = "/Users/protocolw/Public/Rustcodes/Protocoldenver/VyperDeployooor/src-tauri/src/soliditylayout/contracts/storage.sol";
+        let output_path = "/Users/protocolw/Public/Rustcodes/Protocoldenver/VyperDeployooor/src-tauri/src/soliditylayout/contracts";
+        //let file_path = "/Users/protocolw/Public/Rustcodes/Protocoldenver/VyperDeployooor/src-tauri/src/soliditylayout/contracts/storage.sol"; // Update this path
+        match test_solidity(file_path , output_path) {
+            Ok(()) => println!("Compilation succeeded."),
+            Err(e) => eprintln!("Compilation failed: {}", e),
+        }
+    }
+}
+
