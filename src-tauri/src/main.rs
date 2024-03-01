@@ -1,17 +1,17 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-pub mod stylus;
-pub mod key_tree; 
+use ethers::signers::Wallet;
 use serde::{Deserialize, Serialize};
 use serde_json::{to_writer_pretty, Value};
 use sqlx::SqlitePool;
-use std::{collections::BTreeMap, fs::File, io::BufReader, path::{Path, PathBuf}, sync::Mutex};
+use std::{fs::{self, File}, io::BufReader, path::{Path, PathBuf}, process::Command};
 use vyper_rs::vyper::{Evm, Vyper};
 pub mod db;
 use db::*;
 use tabled::{Table, settings::Style};
-use key_tree::{create_key, get_key_by_name, list_keys, AppState};
-
+use ethers::core::rand::thread_rng;
+use ethers::solc::{Project , ProjectPathsConfig};
+use std::str;
 #[derive(Serialize, Deserialize)]
 struct ContractWalletData {
     abi: Value,
@@ -56,12 +56,7 @@ async fn compile_version(path: String, version: String) -> Result<ContractWallet
         &"Cancun" => Evm::Cancun,
         _ => Evm::Shanghai,
     };
-    // remove the "" from the path
-    let path = path.replace("\"", "");
-    println!("{:?}", ver);
-    println!("{:?}", path);
     let cpath: &Path = &Path::new(&path);
-    println!("{:?}", cpath);
     let mut contract = Vyper::new(cpath);
     contract
         .compile_ver(&ver)
@@ -74,6 +69,14 @@ async fn compile_version(path: String, version: String) -> Result<ContractWallet
         abifile_json,
         contract.bytecode.unwrap(),
     ))
+}
+
+#[tauri::command]
+async fn get_keys(key_path: String) -> Result<Value, String> {
+    let keyfile = File::open(PathBuf::from(&key_path)).map_err(|e| e.to_string())?;
+    let reader = BufReader::new(keyfile);
+    let keystore_json: Value = serde_json::from_reader(reader).map_err(|e| e.to_string())?;
+    Ok(keystore_json)
 }
 
 #[tauri::command]
@@ -127,6 +130,13 @@ async fn db_read() -> Result<Vec<Deployment>, String> {
     Ok(query)
 }
 
+#[tauri::command]
+fn generate_keystore(path: String, password: String, name: String) -> Result<(), String> {
+    Wallet::new_keystore(path, &mut thread_rng(), password, Some(&name)).map_err(|e| e.to_string())?; 
+    println!("Success, wallet created!");
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Database::init().await?;
@@ -138,14 +148,55 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             fetch_data,
             set_config,
             get_config,
-            get_key_by_name,
+            get_keys,
             compile_version,
             db_read,
             db_write,
-            list_keys,
-            create_key,
+            generate_keystore
         ])
-        .manage(AppState{tree: Mutex::new(BTreeMap::new())})
         .run(tauri::generate_context!())?;
     Ok(())
 }
+
+
+
+fn test_solidity(file_path : &str , output_path : &str) -> std::io::Result<()> {
+    // Specify the full path to the solc executable
+    let solc_path = "/opt/homebrew/bin/solc";
+
+    let output = Command::new(solc_path)
+        .args([
+            "--combined-json", "abi,bin,metadata",
+            "--overwrite",
+            file_path,
+            "-o", output_path
+        ])
+        .output()?;
+
+    if !output.status.success() {
+        let e = String::from_utf8_lossy(&output.stderr);
+        panic!("Command executed with failing error code: {}", e);
+    }
+
+    println!("solc compilation successful");
+    println!("{:?}" , output);
+    Ok(())
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test] // Changed to synchronous test for simplicity
+    fn test_compile_test_refactored() {
+        let file_path = "src/soliditylayout/contracts/storage.sol";
+        let output_path = "src/soliditylayout/contracts";
+        //let file_path = "/Users/protocolw/Public/Rustcodes/Protocoldenver/VyperDeployooor/src-tauri/src/soliditylayout/contracts/storage.sol"; // Update this path
+        match test_solidity(file_path , output_path) {
+            Ok(()) => println!("Compilation succeeded."),
+            Err(e) => eprintln!("Compilation failed: {}", e),
+        }
+    }
+}
+
