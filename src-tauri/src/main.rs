@@ -2,9 +2,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 pub mod key_tree;
 pub mod stylus;
-use ethers::signers::Wallet;
+pub mod sol_utils;
+use ethers::{addressbook::Contract, signers::Wallet};
 use serde::{Deserialize, Serialize};
 use serde_json::{to_writer_pretty, Value};
+use sol_utils::SolcOutput;
 use sqlx::SqlitePool;
 use std::{
     collections::BTreeMap,
@@ -13,7 +15,7 @@ use std::{
     path::{Path, PathBuf},
     sync::Mutex,
 };
-use std::{fs::{self, File}, io::BufReader, path::{Path, PathBuf}, process::Command};
+use std::{process::Command};
 use vyper_rs::vyper::{Evm, Vyper};
 pub mod db;
 use db::*;
@@ -187,8 +189,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 
 
-fn test_solidity(file_path : &str , output_path : &str) -> std::io::Result<()> {
-    // Specify the full path to the solc executable
+fn compile_solidity(file_path: &str, output_path: &str) -> std::io::Result<()> {
     let solc_path = "/opt/homebrew/bin/solc";
 
     let output = Command::new(solc_path)
@@ -196,7 +197,7 @@ fn test_solidity(file_path : &str , output_path : &str) -> std::io::Result<()> {
             "--combined-json", "abi,bin,metadata",
             "--overwrite",
             file_path,
-            "-o", output_path
+            "-o", output_path,
         ])
         .output()?;
 
@@ -205,8 +206,19 @@ fn test_solidity(file_path : &str , output_path : &str) -> std::io::Result<()> {
         panic!("Command executed with failing error code: {}", e);
     }
 
-    println!("solc compilation successful");
-    println!("{:?}" , output);
+    // Convert the output to a string
+    let output_str = String::from_utf8_lossy(&output.stdout);
+
+    // Parse the JSON output
+    let parsed: SolcOutput = serde_json::from_str(&output_str).expect("Failed to parse JSON");
+
+    // Example of how to access a contract's ABI and bin. Adjust according to your needs.
+    for (key, contract) in parsed.contracts {
+        println!("Contract: {}", key);
+        println!("ABI: {}", serde_json::to_string_pretty(&contract.abi).unwrap());
+        println!("Bytecode: {}", contract.bin);
+    }
+
     Ok(())
 }
 
@@ -220,7 +232,7 @@ mod tests {
         let file_path = "src/soliditylayout/contracts/storage.sol";
         let output_path = "src/soliditylayout/contracts";
         //let file_path = "/Users/protocolw/Public/Rustcodes/Protocoldenver/VyperDeployooor/src-tauri/src/soliditylayout/contracts/storage.sol"; // Update this path
-        match test_solidity(file_path , output_path) {
+        match compile_solidity(file_path , output_path) {
             Ok(()) => println!("Compilation succeeded."),
             Err(e) => eprintln!("Compilation failed: {}", e),
         }
