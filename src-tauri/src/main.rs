@@ -3,15 +3,11 @@
 pub mod key_tree;
 pub mod stylus;
 use serde::{Deserialize, Serialize};
-use serde_json::{to_writer_pretty, Value};
+use serde_json::{json, to_writer_pretty, Value};
 
-use sqlx::SqlitePool;
+use sqlx::{types::Json, SqlitePool};
 use std::{
-    collections::BTreeMap,
-    fs::File,
-    io::{BufReader, Write},
-    path::{Path, PathBuf},
-    sync::Mutex,
+    collections::BTreeMap, fs::{self, File}, io::{stdout, BufReader, Read, Write}, ops::Add, path::{Path, PathBuf}, ptr::read, sync::Mutex
 };
 use vyper_rs::vyper::{Evm, Vyper};
 pub mod db;
@@ -198,7 +194,7 @@ struct CompileOutput {
     bytecode: String,
 }
 #[tauri::command]
-fn compile_solidity(file_path: &str, output_path: &str) -> Result<String, String> {
+fn compile_solidity(file_path: &str, output_path: &str) -> Result<Value, String> {
     let solc_path = "/opt/homebrew/bin/solc";
 
     let output = Command::new(solc_path)
@@ -215,25 +211,12 @@ fn compile_solidity(file_path: &str, output_path: &str) -> Result<String, String
         let error_message = format!("Command executed with failing error code: {}", String::from_utf8_lossy(&output.stderr));
         return Err(error_message); // Directly return the error message as a String
     }
-
-    let json_file_path = format!("{}/combined.json", output_path);
-    let file = File::open(&json_file_path)
-        .map_err(|e| e.to_string())?; // Convert IO errors to String
-    let reader = BufReader::new(file);
-
-    let solc_output: SolcOutput = serde_json::from_reader(reader)
-        .map_err(|e| e.to_string())?; // Convert serde_json errors to String
-    let contract = solc_output.contracts.owner;
-
-    let abi = serde_json::to_string_pretty(&contract.abi)
-        .map_err(|e| e.to_string())?; // Convert serde_json errors to String
-    let bytecode = contract.bin;
-
-    let compile_output = CompileOutput { abi, bytecode };
-    let json_output = serde_json::to_string(&compile_output)
-        .map_err(|e| e.to_string())?;
-
-    Ok(json_output)
+    let mut out_path = output_path.to_owned();
+    out_path.push_str("/combined.json");
+    let compilation_file = fs::read_to_string(out_path).unwrap();
+    let json = json!(compilation_file);
+    //println!("{:?}" , compilation_file);
+    Ok(json)
 }
 
 // Where i can get all this params without asking for it --> Fix this to put default value
