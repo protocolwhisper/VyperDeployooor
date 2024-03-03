@@ -1,35 +1,40 @@
 import { useEffect, useState } from 'react';
 import { useStatus } from '../hooks';
-import { invoke } from '@tauri-apps/api/tauri'
+import { invoke } from '@tauri-apps/api/tauri';
+import { toast } from 'react-hot-toast';
 
 export const CreateConfigPage = () => {
   const [providerUrl, setProviderUrl] = useState('');
-  const [keystoreName, setKeystoreName] = useState('');
+  const [etherscanApiKey, setEtherscanApiKey] = useState('');
   const [status, setStatus] = useStatus('idle');
 
   useEffect(() => {
     (async () => {
-      const config = await invoke('get_config') as {
+      const config = (await invoke('get_config')) as {
         provider: string;
-        keystore: string;
+        etherscan_api: string;
       };
       setProviderUrl(config.provider);
-      setKeystoreName(config.keystore);
-    })()
-  }, [])
+      setEtherscanApiKey(config.etherscan_api);
+    })();
+  }, []);
 
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     try {
       e.preventDefault();
-      setStatus('loading')
-      const keystorePath = `./${keystoreName}`
-      const res =await invoke('set_config', { provider: providerUrl, keystore: keystorePath });
+      setStatus('loading');
+      const res = await invoke('set_config', {
+        provider: providerUrl,
+        etherscanApi: etherscanApiKey,
+      });
       console.log(res);
     } catch (error) {
       console.log(error);
       setStatus('error');
+      toast.error('Error setting config');
     } finally {
       setStatus('success');
+      toast.success('Config set');
     }
   };
 
@@ -37,7 +42,7 @@ export const CreateConfigPage = () => {
     <form className='flex flex-col gap-4' onSubmit={onSubmit}>
       <div className='form-control'>
         <label htmlFor='providerUrl' className='label'>
-          Provider URL
+          ⛓️ Provider URL
         </label>
         <input
           className='input input-bordered'
@@ -49,27 +54,24 @@ export const CreateConfigPage = () => {
       </div>
 
       <div className='form-control'>
-        <label htmlFor='keystoreName' className='label'>
-          Keystore Name
+        <label htmlFor='etherscanApiKey' className='label'>
+          🔑 Etherscan API key
         </label>
         <input
           className='input input-bordered'
           type='text'
-          id='keystoreName'
-          value={keystoreName}
-          onChange={(e) => setKeystoreName(e.target.value)}
+          id='etherscanApiKey'
+          value={etherscanApiKey}
+          onChange={(e) => setEtherscanApiKey(e.target.value)}
         />
       </div>
 
       <button className='btn btn-primary' type='submit'>
-        Create Config
+        {status === 'loading' && (
+          <span className='loading loading-spinner'></span>
+        )}
+        Set Config
       </button>
-
-      <pre>
-        <code>
-          {JSON.stringify(status, null, 2)}
-        </code>
-      </pre>
     </form>
   );
 };

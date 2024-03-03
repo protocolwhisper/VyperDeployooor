@@ -1,6 +1,7 @@
 import { useContext, useEffect, useState } from 'react';
 import { getConfig } from '../lib';
 import { PageContext, Pages } from '../layout';
+import { DeployContractPage } from './deploy-contract'
 
 export const HomePage = () => {
   const { setCurrentPage } = useContext(PageContext);
@@ -16,10 +17,14 @@ export const HomePage = () => {
     })();
   }, []);
 
+  if (!configDoesntExist) {
+    return <DeployContractPage />;
+  }
+
   return (
     <>
       {configDoesntExist && (
-        <div className='text-center'>
+        <div className='text-left mt-4'>
           <p>No config found.</p>
         </div>
       )}
